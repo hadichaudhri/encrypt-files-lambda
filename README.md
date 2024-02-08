@@ -4,9 +4,9 @@ A Lambda function which takes files in one S3 bucket, encrypts them, and exports
 
 ## Demo
 
-You can navigate to my [currently deployed lambda instance](https://8hwnfgzqk5.execute-api.us-east-1.amazonaws.com/default/encrypt-files) and encrypt any files sitting in the S3 bucket! You won't be able to see the encrypted files, but you should see a success message like the one shown below:
+You can navigate to my [currently deployed lambda instance](https://8hwnfgzqk5.execute-api.us-east-1.amazonaws.com/default/encrypt-files) and encrypt any files sitting in the S3 bucket! You won't be able to view the encrypted files, but you'll be able to see a success message like the one shown below!
 
-![Lambda Demo](./demo_screenshot.png)
+![Lambda Demo](./demo_screenshot.jpg)
 
 ## Installation
 
