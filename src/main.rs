@@ -1,4 +1,3 @@
-use aws_lambda_events::s3::S3EventRecord;
 use aws_sdk_s3::Client as S3Client;
 use dotenv::dotenv;
 use encrypt_files::{
@@ -104,29 +103,6 @@ pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile + ListFil
         .body(message.into())
         .map_err(Box::new)?;
     Ok(resp)
-}
-
-fn get_file_props(record: S3EventRecord) -> Result<(String, String), String> {
-    record
-        .event_name
-        .filter(|s| s.starts_with("ObjectCreated"))
-        .ok_or("Wrong event")?;
-
-    let bucket = record
-        .s3
-        .bucket
-        .name
-        .filter(|s| !s.is_empty())
-        .ok_or("No bucket name")?;
-
-    let key = record
-        .s3
-        .object
-        .key
-        .filter(|s| !s.is_empty())
-        .ok_or("No object key")?;
-
-    Ok((bucket, key))
 }
 
 #[tokio::main]
