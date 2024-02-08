@@ -1,7 +1,5 @@
 use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
-use aws_sdk_s3::operation::{
-    delete_object::DeleteObjectError, get_object::GetObjectError, list_objects::ListObjectsError,
-};
+use aws_sdk_s3::operation::{delete_object::DeleteObjectError, get_object::GetObjectError};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client as S3Client;
 
@@ -87,7 +85,7 @@ impl PutFile for S3Client {
                 .into_service_error()
                 .meta()
                 .message()
-                .unwrap_or_else(|| "Unknown upload error")
+                .unwrap_or("Unknown upload error")
                 .to_string()),
         }
     }
@@ -113,7 +111,7 @@ impl ListFiles for S3Client {
                 .into_service_error()
                 .meta()
                 .message()
-                .unwrap_or_else(|| "Unknown bucket access error")
+                .unwrap_or("Unknown bucket access error")
                 .to_string()),
         }
     }
