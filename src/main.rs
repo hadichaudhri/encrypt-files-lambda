@@ -30,6 +30,8 @@ pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile + ListFil
     let (enc_key, nonce) = gen_encryption_config();
 
     let bucket = env::var("BUCKET_NAME").expect("BUCKET_NAME must be set.");
+    let encrypted_bucket =
+        env::var("ENCRYPTED_BUCKET_NAME").expect("ENCRYPTED_BUCKET_NAME must be set.");
 
     let keys = match client.list_files(&bucket).await {
         Ok(k) => k,
@@ -65,9 +67,6 @@ pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile + ListFil
             hex::encode(enc_key),
             hex::encode(nonce)
         );
-
-        let mut encrypted_bucket = bucket.to_owned();
-        encrypted_bucket.push_str("-encrypted");
 
         match client.put_file(&encrypted_bucket, &key, enc_file).await {
             Ok(msg) => tracing::info!(msg),
