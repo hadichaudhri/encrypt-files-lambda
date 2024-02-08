@@ -2,6 +2,12 @@
 
 A Lambda function which takes files in one S3 bucket, encrypts them, and exports to another S3 bucket.
 
+## Demo
+
+You can navigate to my [currently deployed lambda instance](https://8hwnfgzqk5.execute-api.us-east-1.amazonaws.com/default/encrypt-files) and encrypt any files sitting in the S3 bucket! You won't be able to see the encrypted files, but you should see a success message like the one shown below:
+
+![Lambda Demo](./demo_screenshot.png)
+
 ## Installation
 
 Install [Cargo Lambda](https://www.cargo-lambda.info/guide/getting-started.html) and then clone the git repo:
