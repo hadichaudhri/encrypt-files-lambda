@@ -1,4 +1,7 @@
-use aws_sdk_s3::operation::{delete_object::DeleteObjectError, get_object::GetObjectError};
+use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
+use aws_sdk_s3::operation::{
+    delete_object::DeleteObjectError, get_object::GetObjectError, list_objects::ListObjectsError,
+};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client as S3Client;
 
@@ -12,6 +15,10 @@ pub trait DeleteFile {
 
 pub trait PutFile {
     async fn put_file(&self, bucket: &str, key: &str, bytes: Vec<u8>) -> Result<String, String>;
+}
+
+pub trait ListFiles {
+    async fn list_files(&self, bucket: &str) -> Result<Vec<String>, String>;
 }
 
 impl GetFile for S3Client {
@@ -81,6 +88,32 @@ impl PutFile for S3Client {
                 .meta()
                 .message()
                 .unwrap_or_else(|| "Unknown upload error")
+                .to_string()),
+        }
+    }
+}
+
+fn object_to_keys(objects: ListObjectsV2Output) -> Vec<String> {
+    objects
+        .contents()
+        .into_iter()
+        .filter_map(|obj| obj.key().map(|s| s.to_string()))
+        .collect()
+}
+
+impl ListFiles for S3Client {
+    async fn list_files(&self, bucket: &str) -> Result<Vec<String>, String> {
+        tracing::info!("listing files from bucket {}", bucket);
+
+        let res = self.list_objects_v2().bucket(bucket).send().await;
+
+        match res {
+            Ok(objects) => Ok(object_to_keys(objects)),
+            Err(err) => Err(err
+                .into_service_error()
+                .meta()
+                .message()
+                .unwrap_or_else(|| "Unknown bucket access error")
                 .to_string()),
         }
     }

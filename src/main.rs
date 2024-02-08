@@ -1,49 +1,55 @@
-use aws_lambda_events::{event::s3::S3Event, s3::S3EventRecord};
+use aws_lambda_events::s3::S3EventRecord;
 use aws_sdk_s3::Client as S3Client;
 use chacha20poly1305::{aead::Aead, KeyInit, XChaCha20Poly1305};
-use encrypt_files::{DeleteFile, GetFile, PutFile};
-use lambda_runtime::{run, service_fn, Error, LambdaEvent};
+use dotenv::dotenv;
+use encrypt_files::{DeleteFile, GetFile, ListFiles, PutFile};
+use lambda_http::{run, service_fn, Body, Error, Request, Response};
 use rand::{rngs::OsRng, RngCore};
+use std::env;
 
 /**
-This lambda handler
-    * listen to file creation events
+This lambda handler is activated upon a HTTP request to the lambda URL.
+When activited, it scans for all files in [original bucket name] and for each file:
     * downloads the created file
     * creates a encrypted file from it
     * uploads the encrypted to bucket "[original bucket name]-encrypted".
     * deletes the original unencrypted file
 
-Make sure that
-    * the created file has no strange characters in the name
+When deploying, ensure that
+    * the created files have no strange characters in the name
     * there is another bucket with "-encrypted" suffix in the name
     * this lambda only gets events from file creation
     * this lambda has permission to put file into the "-encrypted" bucket
     * this lambda has permission to delete files from the unencrypted bucket
 */
-pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile>(
-    event: LambdaEvent<S3Event>,
+pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile + ListFiles>(
+    req: Request,
     client: &T,
-) -> Result<(), Error> {
-    let records = event.payload.records;
+) -> Result<Response<Body>, Error> {
+    dotenv().ok();
 
     let mut enc_key = [0u8; 32];
     let mut nonce = [0u8; 24];
     OsRng.fill_bytes(&mut enc_key);
     OsRng.fill_bytes(&mut nonce);
 
-    for record in records.into_iter() {
-        let (bucket, key) = match get_file_props(record) {
-            Ok((b, k)) => (b, k),
-            Err(msg) => {
-                tracing::info!("Record skipped with reason: {}", msg);
-                continue;
-            }
-        };
+    let bucket = env::var("BUCKET_NAME").expect("BUCKET_NAME must be set.");
 
+    let keys = match client.list_files(&bucket).await {
+        Ok(k) => k,
+        Err(e) => {
+            tracing::error!("Can not list files from bucket");
+            return Err(e.into());
+        }
+    };
+
+    let mut encountered_error = false;
+    for key in keys {
         let file = match client.get_file(&bucket, &key).await {
             Ok(data) => data,
             Err(msg) => {
                 tracing::error!("Can not get file from S3: {}", msg);
+                encountered_error = true;
                 continue;
             }
         };
@@ -52,6 +58,7 @@ pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile>(
             Ok(vec) => vec,
             Err(msg) => {
                 tracing::error!("Can not create encrypted file: {}", msg);
+                encountered_error = true;
                 continue;
             }
         };
@@ -68,16 +75,38 @@ pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile>(
 
         match client.put_file(&encrypted_bucket, &key, enc_file).await {
             Ok(msg) => tracing::info!(msg),
-            Err(msg) => tracing::error!("Can not upload encrypted file: {}", msg),
+            Err(msg) => {
+                tracing::error!("Can not upload encrypted file: {}", msg);
+                encountered_error = true;
+            }
         }
 
         match client.delete_file(&bucket, &key).await {
             Ok(msg) => tracing::info!(msg),
-            Err(msg) => tracing::error!("Can not delete unencrypted file: {}", msg),
+            Err(msg) => {
+                tracing::error!("Can not delete unencrypted file: {}", msg);
+                encountered_error = true;
+            }
         }
     }
 
-    Ok(())
+    let message = if !encountered_error {
+        format!(
+            "Successfully encrypted all files with enc_key={} and nonce={}",
+            hex::encode(enc_key),
+            hex::encode(nonce)
+        )
+    } else {
+        "Encountered errors while processing files! Please contact the developer for more details!"
+            .to_string()
+    };
+
+    let resp = Response::builder()
+        .status(200)
+        .header("content-type", "text/html")
+        .body(message.into())
+        .map_err(Box::new)?;
+    Ok(resp)
 }
 
 fn get_file_props(record: S3EventRecord) -> Result<(String, String), String> {
@@ -132,7 +161,7 @@ async fn main() -> Result<(), Error> {
     let client = S3Client::new(&shared_config);
     let client_ref = &client;
 
-    let func = service_fn(move |event| async move { function_handler(event, client_ref).await });
+    let func = service_fn(move |req| async move { function_handler(req, client_ref).await });
 
     run(func).await?;
 
