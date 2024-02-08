@@ -54,7 +54,7 @@ impl PutFile for S3Client {
                 .into_service_error()
                 .meta()
                 .message()
-                .unwrap()
+                .unwrap_or_else(|| "Unknown upload error")
                 .to_string()),
         }
     }
