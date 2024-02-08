@@ -1,7 +1,7 @@
 use aws_lambda_events::{event::s3::S3Event, s3::S3EventRecord};
 use aws_sdk_s3::Client as S3Client;
 use chacha20poly1305::{aead::Aead, KeyInit, XChaCha20Poly1305};
-use encrypt_files::{GetFile, PutFile};
+use encrypt_files::{DeleteFile, GetFile, PutFile};
 use lambda_runtime::{run, service_fn, Error, LambdaEvent};
 use rand::{rngs::OsRng, RngCore};
 
@@ -11,14 +11,16 @@ This lambda handler
     * downloads the created file
     * creates a encrypted file from it
     * uploads the encrypted to bucket "[original bucket name]-encrypted".
+    * deletes the original unencrypted file
 
 Make sure that
     * the created file has no strange characters in the name
     * there is another bucket with "-encrypted" suffix in the name
     * this lambda only gets events from file creation
     * this lambda has permission to put file into the "-encrypted" bucket
+    * this lambda has permission to delete files from the unencrypted bucket
 */
-pub(crate) async fn function_handler<T: PutFile + GetFile>(
+pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile>(
     event: LambdaEvent<S3Event>,
     client: &T,
 ) -> Result<(), Error> {
@@ -67,6 +69,11 @@ pub(crate) async fn function_handler<T: PutFile + GetFile>(
         match client.put_file(&encrypted_bucket, &key, enc_file).await {
             Ok(msg) => tracing::info!(msg),
             Err(msg) => tracing::error!("Can not upload encrypted file: {}", msg),
+        }
+
+        match client.delete_file(&bucket, &key).await {
+            Ok(msg) => tracing::info!(msg),
+            Err(msg) => tracing::error!("Can not delete unencrypted file: {}", msg),
         }
     }
 

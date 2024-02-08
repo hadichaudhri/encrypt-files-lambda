@@ -1,9 +1,13 @@
-use aws_sdk_s3::operation::get_object::GetObjectError;
+use aws_sdk_s3::operation::{delete_object::DeleteObjectError, get_object::GetObjectError};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client as S3Client;
 
 pub trait GetFile {
     async fn get_file(&self, bucket: &str, key: &str) -> Result<Vec<u8>, GetObjectError>;
+}
+
+pub trait DeleteFile {
+    async fn delete_file(&self, bucket: &str, key: &str) -> Result<String, DeleteObjectError>;
 }
 
 pub trait PutFile {
@@ -27,6 +31,28 @@ impl GetFile for S3Client {
                 let meta = service_err.meta();
                 tracing::error!(
                     "Error from aws when downloading: {}, key: {}",
+                    meta.to_string(),
+                    key
+                );
+                Err(service_err)
+            }
+        };
+    }
+}
+
+impl DeleteFile for S3Client {
+    async fn delete_file(&self, bucket: &str, key: &str) -> Result<String, DeleteObjectError> {
+        tracing::info!("delete file bucket {}, key {}", bucket, key);
+
+        let res = self.delete_object().bucket(bucket).key(key).send().await;
+
+        return match res {
+            Ok(_) => Ok(format!("Deleted a file with key {} from {}", key, bucket)),
+            Err(err) => {
+                let service_err = err.into_service_error();
+                let meta = service_err.meta();
+                tracing::error!(
+                    "Error from aws when deleting: {}, key: {}",
                     meta.to_string(),
                     key
                 );
