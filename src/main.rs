@@ -1,10 +1,10 @@
 use aws_lambda_events::s3::S3EventRecord;
 use aws_sdk_s3::Client as S3Client;
-use chacha20poly1305::{aead::Aead, KeyInit, XChaCha20Poly1305};
 use dotenv::dotenv;
-use encrypt_files::{DeleteFile, GetFile, ListFiles, PutFile};
+use encrypt_files::{
+    gen_encryption_config, get_encrypted_file, DeleteFile, GetFile, ListFiles, PutFile,
+};
 use lambda_http::{run, service_fn, Body, Error, Request, Response};
-use rand::{rngs::OsRng, RngCore};
 use std::env;
 
 /**
@@ -28,10 +28,7 @@ pub(crate) async fn function_handler<T: PutFile + GetFile + DeleteFile + ListFil
 ) -> Result<Response<Body>, Error> {
     dotenv().ok();
 
-    let mut enc_key = [0u8; 32];
-    let mut nonce = [0u8; 24];
-    OsRng.fill_bytes(&mut enc_key);
-    OsRng.fill_bytes(&mut nonce);
+    let (enc_key, nonce) = gen_encryption_config();
 
     let bucket = env::var("BUCKET_NAME").expect("BUCKET_NAME must be set.");
 
@@ -130,20 +127,6 @@ fn get_file_props(record: S3EventRecord) -> Result<(String, String), String> {
         .ok_or("No object key")?;
 
     Ok((bucket, key))
-}
-
-fn get_encrypted_file(
-    file_data: Vec<u8>,
-    key: &[u8; 32],
-    nonce: &[u8; 24],
-) -> Result<Vec<u8>, String> {
-    let cipher = XChaCha20Poly1305::new(key.into());
-
-    let encrypted_file = cipher
-        .encrypt(nonce.into(), file_data.as_ref())
-        .map_err(|err| format!("Encrypting small file: {}", err))?;
-
-    Ok(encrypted_file)
 }
 
 #[tokio::main]
