@@ -1,4 +1,4 @@
-# encrypt-files-lambda
+# encrypt-files-lambda ![Pipeline Status](https://gitlab.com/dukeaiml/IDS721/hc337-miniproject-2/badges/master/pipeline.svg)
 
 A Lambda function which takes files in one S3 bucket, encrypts them, and exports to another S3 bucket.
 
